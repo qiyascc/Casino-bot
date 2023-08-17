@@ -7,9 +7,9 @@ let groups = {};
 // --------------------------------------------------------------------------------------------------------------------- //
 
 // JSon Files
-if (fs.existsSync('./resources/groups.json')) {
-    groups = JSON.parse(fs.readFileSync('./resources/groups.json'));
-}
+// if (fs.existsSync('./resources/groups.json')) {
+//     groups = JSON.parse(fs.readFileSync('./resources/groups.json'));
+// }
 let groupUsers = {};
 if (fs.existsSync('./resources/groupUser.json')) {
     groupUsers = JSON.parse(fs.readFileSync('./resources/groupUser.json'));
@@ -22,6 +22,10 @@ if (fs.existsSync('./resources/users.json')) {
 if (fs.existsSync('./resources/bank.json')) {
     bank = JSON.parse(fs.readFileSync('./resources/bank.json'));
 }
+if (fs.existsSync('./resources/debts.json')) {
+    debts = JSON.parse(fs.readFileSync('/resources/debts.json'));
+}
+
 
 function updateGroupUsers(groupId, userId) {
     if (!groupUsers[groupId]) {
@@ -100,7 +104,7 @@ function botStart(ctx) {
             message = `🎴 Merhaba ${user.name}, umarım eğleniyorsundur. \n\n🎲 Görünüşe göre zenginsin. 🤠`;
             buttons = [
                 [Markup.button.callback('Lider', 'LEADER'), Markup.button.callback('Yardım', 'HELP')],
-                [Markup.button.url('Oyun Grubu', 'https://t.me/qiyascc')]
+                [Markup.button.url('Oyun Grubu', 'https://t.me/ApexEkibi')]
             ];
         } else {
             message = `🎴 Merhaba ${user.name}, umarım eğleniyorsundur. \n\n🎲 Görünüşe göre fakirsin! Sorun yok marketden coin al ve oyuna devam et.`;
@@ -125,6 +129,12 @@ function botStart(ctx) {
 bot.start((ctx) => {
     botStart(ctx);
 });
+
+bot.action('BACK_TO_START', (ctx) => {
+    ctx.deleteMessage();
+    botStart(ctx);
+});
+
 
 bot.action('LEADER', (ctx) => {
 
@@ -191,10 +201,7 @@ bot.action('HELP', (ctx) => {
 // });
 
 
-bot.action('BACK_TO_START', (ctx) => {
-    ctx.deleteMessage();
-    botStart(ctx);
-});
+
 
 // --------------------------------------------------------------------------------------------------------------------- //
 
@@ -303,7 +310,6 @@ bot.action('diceGame', async (ctx) => {
     diceGame(ctx);
 });
 
-// --------------------------------------------------------------------------------------------------------------------- //
 
 bot.action('JOIN', async (ctx) => {
     const groupId = ctx.chat.id;
@@ -714,6 +720,53 @@ bot.action(/DEBT_(.+)/, (ctx) => {
         Markup.button.callback('100%', `DEBT_AMOUNT_${friendId}_1`)
     ]));
 });
+
+
+
+// Borc geri alma yeri
+
+function updateDebtRatio(userId) {
+    const debtInfo = debts.debts[userId];
+    if (debtInfo) {
+        const daysPassed = Math.floor((Date.now() - new Date(debtInfo.debtor.date).getTime()) / (1000 * 60 * 60 * 24));
+        debtInfo.debtor.time = daysPassed;
+        if (daysPassed === 2) {
+            debtInfo.debtor.ratio = 30;
+            debtInfo.debtor.debt_with_ratio = debtInfo.debtor.debt + (debtInfo.debtor.debt * 0.3);
+        }
+        if (daysPassed > 4) {
+            const user = getOrCreateUser(userId);
+            const amountToTake = user.score - 5;
+            bank.bank_current_money += amountToTake * 0.1;
+            user.score -= amountToTake;
+        }
+        if (daysPassed === 10) {
+            const lender = getOrCreateUser(debtInfo.debtor.id);
+            bot.telegram.sendMessage(lender.id, `Sen ${ctx.from.first_name} tarafından kandırıldın.`);
+            bot.telegram.sendMessage(userId, "Sen bir dolandırıcısın, senin tüm puanlarını alıyorum.");
+            const amountToTake = getOrCreateUser(userId).score;
+            bank.bank_current_money += amountToTake;
+            delete users[userId].score;
+            delete debts.debts[userId];
+        }
+        fs.writeFileSync('./resources/debts.json', JSON.stringify(debts, null, 2));
+        fs.writeFileSync('./resources/bank.json', JSON.stringify(bank, null, 2));
+    }
+}
+
+bot.command('/mydebt', (ctx) => {
+    const userId = ctx.from.id;
+    updateDebtRatio(userId);
+    const debtInfo = debts.debts[userId];
+    if (debtInfo) {
+        const buttons = [Markup.button.callback(debtInfo.debtor.id, `PAY_DEBT_${debtInfo.debtor.id}_${debtInfo.debtor.debt_with_ratio}`)];
+        ctx.reply('Borçlu olduğunuz kişiler:', Markup.inlineKeyboard(buttons));
+    } else {
+        ctx.reply('Borçlu olduğunuz kimse yok.');
+    }
+});
+
+
 
 // --------------------------------------------------------------------------------------------------------------------- //
 // Broadcast
