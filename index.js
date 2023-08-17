@@ -23,7 +23,7 @@ if (fs.existsSync('./resources/bank.json')) {
     bank = JSON.parse(fs.readFileSync('./resources/bank.json'));
 }
 if (fs.existsSync('./resources/debts.json')) {
-    debts = JSON.parse(fs.readFileSync('/resources/debts.json'));
+    debts = JSON.parse(fs.readFileSync('./resources/debts.json'));
 }
 
 
@@ -684,11 +684,26 @@ bot.action(/APPROVE_DEBT_(.+)/, (ctx) => {
     debtor.score += debtAmount;
     user.debtStatus.status = 'approved';
 
+    // Borç bilgileri
+    debts.debts[debtorId] = {
+        debtor: {
+            id: userId,
+            debt: debtAmount,
+            date: new Date().toISOString(),
+            time: 0,
+            ratio: 0,
+            debt_with_ratio: debtAmount,
+            geri_alinan: 0
+        }
+    };
+
     fs.writeFileSync('./resources/users.json', JSON.stringify(users, null, 2));
+    fs.writeFileSync('./resources/debts.json', JSON.stringify(debts, null, 2));
 
     ctx.reply('Borç onaylandı');
     bot.telegram.sendMessage(debtorId, `Arkadaşınız ${ctx.from.first_name} size, ${debtAmount} miktarında borç verdi.`);
 });
+
 
 bot.action(/REJECT_DEBT_(.+)/, (ctx) => {
     const userId = ctx.from.id;
@@ -755,18 +770,25 @@ function updateDebtRatio(userId) {
 }
 
 bot.command('/mydebt', (ctx) => {
-    const userId = ctx.from.id;
-    updateDebtRatio(userId);
-    const debtInfo = debts.debts[userId];
-    if (debtInfo) {
-        const buttons = [Markup.button.callback(debtInfo.debtor.id, `PAY_DEBT_${debtInfo.debtor.id}_${debtInfo.debtor.debt_with_ratio}`)];
-        ctx.reply('Borçlu olduğunuz kişiler:', Markup.inlineKeyboard(buttons));
-    } else {
-        ctx.reply('Borçlu olduğunuz kimse yok.');
+    try {
+        const userId = ctx.from.id;
+        updateDebtRatio(userId);
+        const debtInfo = debts.debts[userId];
+        if (debtInfo) {
+            const debtorName = users[debtInfo.debtor.id].name;
+            const buttons = [Markup.button.callback(debtorName, `PAY__${debtInfo.debtor.id}_${debtInfo.debtor.debt_with_ratio}`)];
+            ctx.reply('Borçlu olduğunuz kişiler:', Markup.inlineKeyboard(buttons));
+        } else {
+            ctx.reply('Borçlu olduğunuz kimse yok.');
+        }
+    } catch (error) {
+        ctx.reply('Bir hata oluştu. Lütfen daha sonra tekrar deneyin.');
     }
 });
 
-bot.action(/PAY_DEBT_(.+)_([0-9.]+)/, (ctx) => {
+
+
+bot.action(/PAY__(.+)_([0-9.]+)/, (ctx) => {
     const userId = ctx.from.id;
     const lenderId = ctx.match[1];
     const amount = parseFloat(ctx.match[2]);
