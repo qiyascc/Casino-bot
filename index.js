@@ -766,7 +766,27 @@ bot.command('/mydebt', (ctx) => {
     }
 });
 
+bot.action(/PAY_DEBT_(.+)_([0-9.]+)/, (ctx) => {
+    const userId = ctx.from.id;
+    const lenderId = ctx.match[1];
+    const amount = parseFloat(ctx.match[2]);
 
+    const user = getOrCreateUser(userId);
+    if (user.score >= amount + 10) {
+        user.score -= amount;
+        const lender = getOrCreateUser(lenderId);
+        lender.score += amount;
+        debts.debts[userId].debtor.geri_alinan += amount;
+        if (debts.debts[userId].debtor.geri_alinan >= debts.debts[userId].debtor.debt_with_ratio) {
+            delete debts.debts[userId];
+        }
+        fs.writeFileSync('./resources/users.json', JSON.stringify(users, null, 2));
+        fs.writeFileSync('./resources/debts.json', JSON.stringify(debts, null, 2));
+        ctx.editMessageText('Borç geri ödendi.');
+    } else {
+        ctx.reply('Yeterli puanınız yok.');
+    }
+});
 
 // --------------------------------------------------------------------------------------------------------------------- //
 // Broadcast
